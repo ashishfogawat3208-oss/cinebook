@@ -16,10 +16,7 @@ import {
 
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
-import {
-  getBooking,
-  getTicket,
-} from "@/lib/bookings";
+import { getBooking, getTicket } from "@/lib/bookings";
 
 import { api } from "@/lib/api";
 
@@ -142,11 +139,14 @@ function BookingConfirmationContent() {
    * Axios uses the interceptor in lib/api.ts, which adds:
    *
    * Authorization: Bearer <access_token>
-   *
-   * This fixes the 401 error from the Django download endpoint.
    */
   const handleDownloadTicket = async () => {
-    if (!booking.ticket_download_url) {
+    const currentBooking = booking;
+
+    if (
+      !currentBooking ||
+      !currentBooking.ticket_download_url
+    ) {
       return;
     }
 
@@ -154,18 +154,21 @@ function BookingConfirmationContent() {
       setDownloadLoading(true);
 
       const response = await api.get(
-        booking.ticket_download_url,
+        currentBooking.ticket_download_url,
         {
           responseType: "blob",
         }
       );
 
+      const contentType =
+        typeof response.headers["content-type"] === "string"
+          ? response.headers["content-type"]
+          : "application/pdf";
+
       const blob = new Blob(
         [response.data],
         {
-          type:
-            response.headers["content-type"] ||
-            "application/pdf",
+          type: contentType,
         }
       );
 
@@ -178,7 +181,7 @@ function BookingConfirmationContent() {
       link.href = url;
 
       link.download =
-        `movie-ticket-${booking.booking_id}.pdf`;
+        `movie-ticket-${currentBooking.booking_id}.pdf`;
 
       document.body.appendChild(link);
 

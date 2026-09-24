@@ -48,12 +48,16 @@ export default function BookingCard({
         }
       );
 
+      const contentType =
+        typeof response.headers["content-type"] ===
+        "string"
+          ? response.headers["content-type"]
+          : "application/pdf";
+
       const blob = new Blob(
         [response.data],
         {
-          type:
-            response.headers["content-type"] ||
-            "application/pdf",
+          type: contentType,
         }
       );
 
@@ -223,9 +227,7 @@ export default function BookingCard({
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-xs font-semibold transition hover:bg-white/10"
             >
               View Details
-              <ChevronRight
-                size={14}
-              />
+              <ChevronRight size={14} />
             </Link>
           </div>
         </div>
@@ -254,15 +256,12 @@ function formatDate(value: string) {
     return value;
   }
 
-  return date.toLocaleDateString(
-    "en-IN",
-    {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }
-  );
+  return date.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function formatTime(value: string) {
@@ -272,11 +271,8 @@ function formatTime(value: string) {
     return value;
   }
 
-  return date.toLocaleTimeString(
-    "en-IN",
-    {
-      hour: "numeric",
-      minute: "2-digit",
-    }
-  );
+  return date.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
