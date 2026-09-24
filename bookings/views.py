@@ -1,20 +1,21 @@
 from django.core.exceptions import ValidationError
+
 from django.db import transaction
+
 from django.shortcuts import get_object_or_404
+
 from django.utils import timezone
 
 from rest_framework import generics, status
+
 from rest_framework.permissions import IsAuthenticated
+
 from rest_framework.response import Response
 
 from bookings.models import (
     Booking,
     Payment,
     ShowSeat,
-)
-
-from bookings.notification_tasks import (
-    queue_ticket_workflow,
 )
 
 from bookings.serializers import (
@@ -29,6 +30,10 @@ from bookings.services.booking import (
 
 from bookings.services.payment import (
     process_mock_payment,
+)
+
+from bookings.services.ticket import (
+    generate_ticket_for_booking,
 )
 
 from theaters.models import Show
@@ -371,12 +376,31 @@ class MockPaymentView(
             payment.status
             == Payment.STATUS_SUCCESS
         ):
-            transaction.on_commit(
-                lambda: queue_ticket_workflow(
-                    str(
-                        booking.booking_id
+
+            booking_id_for_ticket = (
+                booking.booking_id
+            )
+
+            def generate_ticket_after_commit():
+                try:
+                    booking_for_ticket = (
+                        Booking.objects.get(
+                            booking_id=booking_id_for_ticket
+                        )
                     )
-                )
+
+                    generate_ticket_for_booking(
+                        booking_for_ticket
+                    )
+
+                except Exception as exc:
+                    print(
+                        "Ticket generation failed:",
+                        exc,
+                    )
+
+            transaction.on_commit(
+                generate_ticket_after_commit
             )
 
         updated_booking = (
