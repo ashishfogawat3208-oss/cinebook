@@ -1,0 +1,315 @@
+[
+{
+  "model": "movies.genre",
+  "pk": 1,
+  "fields": {
+    "name": "Action"
+  }
+},
+{
+  "model": "movies.genre",
+  "pk": 2,
+  "fields": {
+    "name": "Drama"
+  }
+},
+{
+  "model": "movies.genre",
+  "pk": 3,
+  "fields": {
+    "name": "comedy"
+  }
+},
+{
+  "model": "movies.genre",
+  "pk": 4,
+  "fields": {
+    "name": "sci-fi"
+  }
+},
+{
+  "model": "movies.language",
+  "pk": 1,
+  "fields": {
+    "name": "English"
+  }
+},
+{
+  "model": "movies.language",
+  "pk": 2,
+  "fields": {
+    "name": "Hindi"
+  }
+},
+{
+  "model": "movies.language",
+  "pk": 3,
+  "fields": {
+    "name": "Tamil"
+  }
+},
+{
+  "model": "movies.movie",
+  "pk": 1,
+  "fields": {
+    "title": "Interstellar",
+    "description": "A team of explorers travel through a wormhole in space.",
+    "release_date": "2014-11-07",
+    "duration_minutes": 169,
+    "rating": "8.7",
+    "popularity": 100,
+    "poster": "",
+    "trailer_url": "",
+    "is_active": true,
+    "created_at": "2026-09-20T03:55:51.651Z",
+    "updated_at": "2026-09-20T03:55:51.651Z",
+    "genres": [
+      2,
+      4
+    ],
+    "languages": [
+      1
+    ]
+  }
+},
+{
+  "model": "theaters.city",
+  "pk": 1,
+  "fields": {
+    "name": "chennai"
+  }
+},
+{
+  "model": "theaters.theater",
+  "pk": 1,
+  "fields": {
+    "name": "PVR Cinemas",
+    "city": 1,
+    "address": "chennai , Tamilnadu",
+    "is_active": true,
+    "created_at": "2026-09-20T03:43:14.489Z"
+  }
+},
+{
+  "model": "theaters.screen",
+  "pk": 1,
+  "fields": {
+    "theater": 1,
+    "name": "screen 1",
+    "total_seats": 60
+  }
+},
+{
+  "model": "theaters.show",
+  "pk": 1,
+  "fields": {
+    "movie": 1,
+    "screen": 1,
+    "start_time": "2026-09-23T13:00:00Z",
+    "end_time": "2026-09-24T17:00:00Z",
+    "ticket_price": "250.00",
+    "is_active": true,
+    "created_at": "2026-09-20T03:57:07.951Z"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 1,
+  "fields": {
+    "screen": 1,
+    "row": "A",
+    "number": 1,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 2,
+  "fields": {
+    "screen": 1,
+    "row": "A",
+    "number": 2,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 3,
+  "fields": {
+    "screen": 1,
+    "row": "A",
+    "number": 3,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 4,
+  "fields": {
+    "screen": 1,
+    "row": "A",
+    "number": 4,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 5,
+  "fields": {
+    "screen": 1,
+    "row": "A",
+    "number": 5,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 6,
+  "fields": {
+    "screen": 1,
+    "row": "B",
+    "number": 1,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 7,
+  "fields": {
+    "screen": 1,
+    "row": "B",
+    "number": 2,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 8,
+  "fields": {
+    "screen": 1,
+    "row": "B",
+    "number": 3,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 9,
+  "fields": {
+    "screen": 1,
+    "row": "B",
+    "number": 4,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "theaters.seat",
+  "pk": 10,
+  "fields": {
+    "screen": 1,
+    "row": "B",
+    "number": 5,
+    "seat_type": "REGULAR"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 1,
+  "fields": {
+    "show": 1,
+    "seat": 1,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 2,
+  "fields": {
+    "show": 1,
+    "seat": 2,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 3,
+  "fields": {
+    "show": 1,
+    "seat": 3,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 4,
+  "fields": {
+    "show": 1,
+    "seat": 4,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 5,
+  "fields": {
+    "show": 1,
+    "seat": 5,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 6,
+  "fields": {
+    "show": 1,
+    "seat": 6,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 7,
+  "fields": {
+    "show": 1,
+    "seat": 7,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 8,
+  "fields": {
+    "show": 1,
+    "seat": 8,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 9,
+  "fields": {
+    "show": 1,
+    "seat": 9,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+},
+{
+  "model": "bookings.showseat",
+  "pk": 10,
+  "fields": {
+    "show": 1,
+    "seat": 10,
+    "price": "250.00",
+    "status": "AVAILABLE"
+  }
+}
+]
