@@ -1,14 +1,10 @@
 from django.core.exceptions import ValidationError
 
-from django.core.mail import EmailMessage, get_connection
-
 from django.db import transaction
 
 from django.shortcuts import get_object_or_404
 
 from django.utils import timezone
-
-import os
 
 from rest_framework import generics, status
 
@@ -38,6 +34,10 @@ from bookings.services.payment import (
 
 from bookings.services.ticket import (
     generate_ticket_for_booking,
+)
+
+from bookings.services.email import (
+    send_ticket_email,
 )
 
 from theaters.models import Show
@@ -385,165 +385,66 @@ class MockPaymentView(
                 booking.booking_id
             )
 
-            def generate_ticket_after_commit():
+            def generate_ticket_and_send_email():
                 try:
+                    # Fetch the booking again after
+                    # the payment transaction commits.
                     booking_for_ticket = (
+                        Booking.objects.get(
+                            booking_id=booking_id_for_ticket
+                        )
+                    )
+
+                    # Generate the PDF ticket first.
+                    generate_ticket_for_booking(
+                        booking_for_ticket
+                    )
+
+                    # Reload the booking with the
+                    # ticket relation and all required
+                    # email data.
+                    booking_for_email = (
                         Booking.objects
                         .select_related(
                             "user",
                             "show",
                             "show__movie",
-                            "show__screen",
-                            "show__screen__theater",
-                            "show__screen__theater__city",
-                        )
-                        .prefetch_related(
-                            "booking_seats__show_seat__seat",
+                            "ticket",
                         )
                         .get(
                             booking_id=booking_id_for_ticket
                         )
                     )
 
-                    ticket = generate_ticket_for_booking(
-                        booking_for_ticket
-                    )
-
-                    recipient = (
-                        booking_for_ticket.user.email
-                        or ""
-                    ).strip()
-
-                    if not recipient:
-                        print(
-                            "Ticket email skipped: user has no email address."
-                        )
-                        return
-
-                    smtp_password = os.getenv(
-                        "EMAIL_HOST_PASSWORD",
-                        "",
-                    )
-
-                    if not smtp_password:
-                        print(
-                            "Ticket email skipped: EMAIL_HOST_PASSWORD is not configured."
-                        )
-                        return
-
-                    use_tls = os.getenv(
-                        "EMAIL_USE_TLS",
-                        "True",
-                    ).lower() in {
-                        "true",
-                        "1",
-                        "yes",
-                    }
-
-                    use_ssl = os.getenv(
-                        "EMAIL_USE_SSL",
-                        "False",
-                    ).lower() in {
-                        "true",
-                        "1",
-                        "yes",
-                    }
-
-                    connection = get_connection(
-                        backend=(
-                            "django.core.mail.backends.smtp.EmailBackend"
-                        ),
-                        host=os.getenv(
-                            "EMAIL_HOST",
-                            "smtp.gmail.com",
-                        ),
-                        port=int(
-                            os.getenv(
-                                "EMAIL_PORT",
-                                "587",
+                    # Send the ticket PDF using Resend.
+                    # Email failure must NEVER turn a
+                    # successful payment into HTTP 500.
+                    try:
+                        email_response = (
+                            send_ticket_email(
+                                booking_for_email
                             )
-                        ),
-                        username=os.getenv(
-                            "EMAIL_HOST_USER",
-                            "",
-                        ),
-                        password=smtp_password,
-                        use_tls=use_tls,
-                        use_ssl=use_ssl,
-                        fail_silently=False,
-                    )
-
-                    show = booking_for_ticket.show
-
-                    seat_names = [
-                        f"{seat.show_seat.seat.row}"
-                        f"{seat.show_seat.seat.number}"
-                        for seat in booking_for_ticket.booking_seats.all()
-                    ]
-
-                    show_time = timezone.localtime(
-                        show.start_time
-                    ).strftime(
-                        "%d %b %Y, %I:%M %p"
-                    )
-
-                    from_email = os.getenv(
-                        "DEFAULT_FROM_EMAIL",
-                        os.getenv(
-                            "EMAIL_HOST_USER",
-                            "CineBook",
-                        ),
-                    )
-
-                    email = EmailMessage(
-                        subject=(
-                            "CineBook - Your Movie Ticket is Confirmed"
-                        ),
-                        body=(
-                            f"Hi {booking_for_ticket.user.first_name or booking_for_ticket.user.username},\n\n"
-                            "Your CineBook booking has been confirmed successfully.\n\n"
-                            f"Movie: {show.movie.title}\n"
-                            f"Theater: {show.screen.theater.name}\n"
-                            f"City: {show.screen.theater.city.name}\n"
-                            f"Screen: {show.screen.name}\n"
-                            f"Show: {show_time}\n"
-                            f"Seats: {', '.join(seat_names) or 'N/A'}\n"
-                            f"Amount: Rs. {booking_for_ticket.total_amount}\n"
-                            f"Booking ID: {booking_for_ticket.booking_id}\n"
-                            f"Payment Reference: {payment.payment_reference}\n"
-                            f"Ticket Number: {ticket.ticket_number}\n\n"
-                            "Your PDF ticket is attached to this email.\n\n"
-                            "Please keep this ticket available when you visit the theater.\n\n"
-                            "Thanks,\n"
-                            "CineBook Team"
-                        ),
-                        from_email=from_email,
-                        to=[recipient],
-                        connection=connection,
-                    )
-
-                    with ticket.pdf.open("rb") as pdf_file:
-                        email.attach(
-                            f"ticket-{booking_for_ticket.booking_id}.pdf",
-                            pdf_file.read(),
-                            "application/pdf",
                         )
 
-                    email.send(fail_silently=False)
+                        print(
+                            "Ticket email sent successfully:",
+                            email_response,
+                        )
 
-                    print(
-                        "Ticket email sent successfully to:",
-                        recipient,
-                    )
+                    except Exception as email_exc:
+                        print(
+                            "Ticket email failed:",
+                            email_exc,
+                        )
 
-                except Exception as exc:
+                except Exception as ticket_exc:
                     print(
-                        "Ticket email/generation failed:",
-                        exc,
+                        "Ticket generation failed:",
+                        ticket_exc,
                     )
 
             transaction.on_commit(
-                generate_ticket_after_commit
+                generate_ticket_and_send_email
             )
 
         updated_booking = (
