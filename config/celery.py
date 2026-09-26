@@ -23,7 +23,6 @@ app.config_from_object(
 app.autodiscover_tasks()
 
 
-# Celery/Redis reliability settings.
 app.conf.update(
     broker_connection_retry_on_startup=True,
     task_acks_late=True,
@@ -31,10 +30,17 @@ app.conf.update(
 )
 
 
-# Periodic tasks.
 app.conf.beat_schedule = {
+
     "expire-pending-bookings-every-minute": {
-        "task": "bookings.tasks.expire_pending_bookings",
+        "task":
+            "bookings.tasks.expire_pending_bookings",
         "schedule": 60.0,
+    },
+
+    "release-expired-seat-holds-every-30-seconds": {
+        "task":
+            "bookings.tasks.release_expired_seat_holds",
+        "schedule": 30.0,
     },
 }

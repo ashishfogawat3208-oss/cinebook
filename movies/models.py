@@ -75,6 +75,12 @@ class Movie(models.Model):
         blank=True,
     )
 
+    age_certification = models.CharField(
+        max_length=10,
+        blank=True,
+        default="U",
+    )
+
     is_active = models.BooleanField(
         default=True,
         db_index=True,
@@ -133,3 +139,12 @@ class MovieView(models.Model):
             f"{self.user.username} "
             f"viewed {self.movie.title}"
         )
+
+
+# Additional movie management models
+from .review_models import (
+    CastMember,
+    MovieCast,
+    MoviePoster,
+    MovieReview,
+)

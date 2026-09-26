@@ -55,6 +55,26 @@ FRONTEND_BASE_URL = os.getenv(
 
 
 # ============================================================
+# RAZORPAY
+# ============================================================
+
+RAZORPAY_KEY_ID = os.getenv(
+    "RAZORPAY_KEY_ID",
+    "",
+)
+
+RAZORPAY_KEY_SECRET = os.getenv(
+    "RAZORPAY_KEY_SECRET",
+    "",
+)
+
+RAZORPAY_WEBHOOK_SECRET = os.getenv(
+    "RAZORPAY_WEBHOOK_SECRET",
+    "",
+)
+
+
+# ============================================================
 # APPLICATIONS
 # ============================================================
 
@@ -79,6 +99,7 @@ INSTALLED_APPS = [
     "movies",
     "theaters",
     "bookings",
+    "analytics",
 ]
 
 
@@ -289,6 +310,7 @@ CLOUDINARY_STORAGE = {
 
 
 # Django 5.1+ / Django 6 storage configuration
+
 STORAGES = {
     "default": {
         "BACKEND": (

@@ -1,172 +1,245 @@
 "use client";
 
-import { Armchair, Check } from "lucide-react";
-
+import { useMemo } from "react";
 import type { ShowSeat } from "@/lib/types";
 
 interface SeatMapProps {
   seats: ShowSeat[];
   selectedSeatIds: number[];
-  onSeatToggle: (seat: ShowSeat) => void;
+  onSeatClick: (seat: ShowSeat) => void;
 }
 
-interface SeatRow {
-  row: string;
-  seats: ShowSeat[];
+function getSeatState(
+  seat: ShowSeat,
+  selectedSeatIds: number[]
+) {
+  if (
+    selectedSeatIds.includes(seat.id)
+  ) {
+    return "selected";
+  }
+
+  switch (seat.reservation_status) {
+    case "BOOKED":
+      return "booked";
+
+    case "TEMPORARILY_RESERVED":
+      return "reserved";
+
+    case "MY_RESERVATION":
+      return "mine";
+
+    default:
+      return "available";
+  }
 }
 
 export default function SeatMap({
   seats,
   selectedSeatIds,
-  onSeatToggle,
+  onSeatClick,
 }: SeatMapProps) {
-  const rows = buildRows(seats);
+  const groupedSeats = useMemo(() => {
+    const groups: Record<
+      string,
+      ShowSeat[]
+    > = {};
+
+    for (const seat of seats) {
+      const row =
+        seat.seat_label.match(/^[A-Za-z]+/)?.[0] ||
+        "A";
+
+      if (!groups[row]) {
+        groups[row] = [];
+      }
+
+      groups[row].push(seat);
+    }
+
+    return groups;
+  }, [seats]);
+
+  const rows = Object.entries(
+    groupedSeats
+  ).sort(([a], [b]) =>
+    a.localeCompare(b, undefined, {
+      numeric: true,
+    })
+  );
+
+  function handleSeatClick(
+    seat: ShowSeat
+  ) {
+    const state = getSeatState(
+      seat,
+      selectedSeatIds
+    );
+
+    if (
+      state === "booked" ||
+      state === "reserved"
+    ) {
+      return;
+    }
+
+    onSeatClick(seat);
+  }
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="min-w-[650px]">
-        <div className="mx-auto mb-10 max-w-2xl">
-          <div className="relative h-10 overflow-hidden rounded-[50%] border-t-4 border-zinc-500 bg-gradient-to-b from-white/10 to-transparent">
-            <div className="absolute inset-x-16 top-2 text-center text-xs font-semibold uppercase tracking-[0.4em] text-zinc-500">
-              Screen
-            </div>
-          </div>
-        </div>
+    <div className="space-y-8">
+      {/* Screen */}
+      <div className="flex flex-col items-center">
+        <div className="h-1.5 w-[80%] rounded-full bg-white/70 shadow-[0_0_30px_rgba(255,255,255,0.35)]" />
 
-        <div className="space-y-5">
-          {rows.map((row) => (
-            <div
-              key={row.row}
-              className="flex items-center justify-center gap-3"
-            >
-              <span className="flex w-7 shrink-0 items-center justify-center text-xs font-semibold text-zinc-600">
-                {row.row}
-              </span>
+        <p className="mt-3 text-xs uppercase tracking-[0.35em] text-zinc-600">
+          Screen
+        </p>
+      </div>
 
-              <div className="flex items-center gap-2">
-                {row.seats.map((seat, index) => {
-                  const selected = selectedSeatIds.includes(seat.id);
+      {/* Seats */}
+      <div className="overflow-x-auto pb-3">
+        <div className="mx-auto min-w-fit space-y-4">
+          {rows.map(
+            ([rowName, rowSeats]) => (
+              <div
+                key={rowName}
+                className="flex items-center justify-center gap-2 sm:gap-3"
+              >
+                <span className="w-5 text-center text-xs font-semibold text-zinc-600">
+                  {rowName}
+                </span>
 
-                  const unavailable =
-                    seat.status !== "AVAILABLE";
+                <div className="flex gap-2 sm:gap-3">
+                  {rowSeats.map(
+                    (seat) => {
+                      const state =
+                        getSeatState(
+                          seat,
+                          selectedSeatIds
+                        );
 
-                  const previousSeat =
-                    row.seats[index - 1];
+                      const isMine =
+                        state === "mine";
 
-                  const shouldCreateGap =
-                    previousSeat &&
-                    previousSeat.seat_label.charAt(0) ===
-                      seat.seat_label.charAt(0) &&
-                    Number(
-                      previousSeat.seat_label.slice(1)
-                    ) % 5 === 0;
+                      const isSelected =
+                        state === "selected";
 
-                  return (
-                    <div
-                      key={seat.id}
-                      className={
-                        shouldCreateGap
-                          ? "ml-4"
-                          : undefined
-                      }
-                    >
-                      <SeatButton
-                        seat={seat}
-                        selected={selected}
-                        unavailable={unavailable}
-                        onClick={() => onSeatToggle(seat)}
-                      />
-                    </div>
-                  );
-                })}
+                      const disabled =
+                        state ===
+                          "booked" ||
+                        state ===
+                          "reserved";
+
+                      return (
+                        <button
+                          key={seat.id}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() =>
+                            handleSeatClick(
+                              seat
+                            )
+                          }
+                          title={`${seat.seat_label} • ₹${Number(
+                            seat.price
+                          ).toFixed(2)}`}
+                          className={[
+                            "relative flex h-9 w-9 items-center justify-center rounded-t-lg rounded-b-md border text-[10px] font-semibold transition sm:h-10 sm:w-10",
+                            disabled
+                              ? "cursor-not-allowed opacity-60"
+                              : "cursor-pointer hover:-translate-y-0.5",
+                            isSelected
+                              ? "border-red-400 bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.35)]"
+                              : "",
+                            isMine
+                              ? "border-yellow-400 bg-yellow-500/20 text-yellow-300"
+                              : "",
+                            state ===
+                            "available"
+                              ? "border-white/15 bg-white/[0.06] text-zinc-400 hover:border-green-400 hover:bg-green-500/10 hover:text-green-300"
+                              : "",
+                            state ===
+                            "reserved"
+                              ? "border-orange-400/30 bg-orange-500/10 text-orange-300"
+                              : "",
+                            state ===
+                            "booked"
+                              ? "border-white/5 bg-zinc-800 text-zinc-600"
+                              : "",
+                          ].join(" ")}
+                        >
+                          {seat.seat_label}
+
+                          {seat.remaining_seconds &&
+                          seat.remaining_seconds >
+                            0 &&
+                          state ===
+                            "reserved" ? (
+                            <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] text-orange-400">
+                              {Math.ceil(
+                                seat.remaining_seconds /
+                                  60
+                              )}
+                              m
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 text-xs text-zinc-500">
+        <Legend
+          className="bg-white/[0.06] border-white/15"
+          label="Available"
+        />
+
+        <Legend
+          className="bg-red-600 border-red-400"
+          label="Selected"
+        />
+
+        <Legend
+          className="bg-yellow-500/20 border-yellow-400"
+          label="Your reservation"
+        />
+
+        <Legend
+          className="bg-orange-500/10 border-orange-400/30"
+          label="Temporarily reserved"
+        />
+
+        <Legend
+          className="bg-zinc-800 border-white/5"
+          label="Booked"
+        />
       </div>
     </div>
   );
 }
 
-function SeatButton({
-  seat,
-  selected,
-  unavailable,
-  onClick,
+function Legend({
+  className,
+  label,
 }: {
-  seat: ShowSeat;
-  selected: boolean;
-  unavailable: boolean;
-  onClick: () => void;
+  className: string;
+  label: string;
 }) {
-  if (unavailable) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-700"
-        title={`${seat.seat_label} unavailable`}
-      >
-        <Armchair size={17} />
-      </button>
-    );
-  }
-
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group relative flex h-10 w-10 items-center justify-center rounded-lg border text-xs font-semibold transition duration-200 ${
-        selected
-          ? "border-red-400 bg-red-600 text-white shadow-lg shadow-red-600/20"
-          : "border-white/10 bg-white/[0.04] text-zinc-400 hover:border-red-500/50 hover:bg-red-500/10 hover:text-white"
-      }`}
-      title={`${seat.seat_label} — ₹${Number(
-        seat.price
-      ).toFixed(0)}`}
-    >
-      {selected ? (
-        <Check size={16} />
-      ) : (
-        <Armchair size={16} />
-      )}
+    <div className="flex items-center gap-2">
+      <span
+        className={`h-4 w-4 rounded-sm border ${className}`}
+      />
 
-      <span className="absolute -bottom-5 whitespace-nowrap text-[9px] text-zinc-700 opacity-0 transition group-hover:opacity-100">
-        {seat.seat_label}
-      </span>
-    </button>
+      <span>{label}</span>
+    </div>
   );
-}
-
-function buildRows(seats: ShowSeat[]): SeatRow[] {
-  const rowMap = new Map<string, ShowSeat[]>();
-
-  seats.forEach((seat) => {
-    const row = seat.seat_label.charAt(0);
-
-    if (!rowMap.has(row)) {
-      rowMap.set(row, []);
-    }
-
-    rowMap.get(row)!.push(seat);
-  });
-
-  return Array.from(rowMap.entries())
-    .sort(([rowA], [rowB]) =>
-      rowA.localeCompare(rowB)
-    )
-    .map(([row, rowSeats]) => ({
-      row,
-      seats: [...rowSeats].sort(
-        (a, b) =>
-          extractSeatNumber(a.seat_label) -
-          extractSeatNumber(b.seat_label)
-      ),
-    }));
-}
-
-function extractSeatNumber(label: string) {
-  const number = Number(label.slice(1));
-
-  return Number.isNaN(number) ? 0 : number;
 }

@@ -6,29 +6,47 @@ import type {
   Language,
   Movie,
   PaginatedResponse,
-  Theater,
   Show,
+  Theater,
 } from "@/lib/types";
+
 
 export interface MovieFilters {
   search?: string;
+
   genre?: string;
+
   language?: string;
+
   city?: string;
+
   theater?: string;
+
   release_date?: string;
+
   release_from?: string;
+
   release_to?: string;
+
   min_rating?: string;
+
   max_rating?: string;
+
   show_date?: string;
+
   show_time?: string;
+
   min_price?: string;
+
   max_price?: string;
+
   sort?: string;
+
   page?: number;
+
   page_size?: number;
 }
+
 
 export async function getMovies(
   filters: MovieFilters = {}
@@ -44,6 +62,7 @@ export async function getMovies(
   return response.data;
 }
 
+
 export async function getMovie(
   movieId: number
 ): Promise<Movie> {
@@ -55,61 +74,115 @@ export async function getMovie(
   return response.data;
 }
 
+
 export async function getRecommendedMovies(): Promise<Movie[]> {
   const response = await api.get<
     Movie[] | PaginatedResponse<Movie>
-  >("/movies/recommended/");
+  >(
+    "/movies/recommended/"
+  );
 
   return extractResults(response.data);
 }
+
+
+export async function getSimilarMovies(
+  movie: Movie
+): Promise<Movie[]> {
+  const firstGenre = movie.genres?.[0];
+
+  if (!firstGenre) {
+    const response =
+      await getMovies({
+        sort: "popularity",
+        page_size: 6,
+      });
+
+    return response.results.filter(
+      (item) => item.id !== movie.id
+    );
+  }
+
+  const response =
+    await getMovies({
+      genre: String(firstGenre.id),
+      sort: "popularity",
+      page_size: 7,
+    });
+
+  return response.results.filter(
+    (item) => item.id !== movie.id
+  );
+}
+
 
 export async function getMovieGenres(): Promise<Genre[]> {
   const response = await api.get<
     Genre[] | PaginatedResponse<Genre>
-  >("/movies/genres/");
+  >(
+    "/movies/genres/"
+  );
 
   return extractResults(response.data);
 }
+
 
 export async function getMovieLanguages(): Promise<Language[]> {
   const response = await api.get<
     Language[] | PaginatedResponse<Language>
-  >("/movies/languages/");
+  >(
+    "/movies/languages/"
+  );
 
   return extractResults(response.data);
 }
+
 
 export async function getCities(): Promise<City[]> {
   const response = await api.get<
     City[] | PaginatedResponse<City>
-  >("/theaters/cities/");
+  >(
+    "/theaters/cities/"
+  );
 
   return extractResults(response.data);
 }
+
 
 export async function getTheaters(
   cityId?: string
 ): Promise<Theater[]> {
   const response = await api.get<
     Theater[] | PaginatedResponse<Theater>
-  >("/theaters/theaters/", {
-    params: cityId
-      ? { city: cityId }
-      : undefined,
-  });
+  >(
+    "/theaters/theaters/",
+    {
+      params: cityId
+        ? { city: cityId }
+        : undefined,
+    }
+  );
 
   return extractResults(response.data);
 }
 
+
 export interface ShowFilters {
   city?: string;
+
   theater?: string;
+
   date?: string;
+
   timeFrom?: string;
+
   timeTo?: string;
+
   minPrice?: string;
+
   maxPrice?: string;
 }
+
 
 export async function getMovieShows(
   movieId: number,
@@ -122,11 +195,17 @@ export async function getMovieShows(
     {
       params: cleanParams({
         city: filters.city,
+
         theater: filters.theater,
+
         date: filters.date,
+
         time_from: filters.timeFrom,
+
         time_to: filters.timeTo,
+
         min_price: filters.minPrice,
+
         max_price: filters.maxPrice,
       }),
     }
@@ -134,6 +213,7 @@ export async function getMovieShows(
 
   return extractResults(response.data);
 }
+
 
 export async function getShow(
   showId: number
@@ -146,6 +226,7 @@ export async function getShow(
   return response.data;
 }
 
+
 export async function createMovieView(
   movieId: number
 ): Promise<void> {
@@ -156,6 +237,7 @@ export async function createMovieView(
     }
   );
 }
+
 
 function extractResults<T>(
   data: T[] | PaginatedResponse<T>
@@ -175,6 +257,7 @@ function extractResults<T>(
 
   return [];
 }
+
 
 function cleanParams<T extends object>(
   filters: T

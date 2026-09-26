@@ -389,6 +389,27 @@ class MovieDetailView(
     generics.RetrieveAPIView
 ):
     """
+    Return complete information for one movie,
+    including genres, languages, cast members,
+    posters and age certification.
+    """
+
+    permission_classes = [
+        AllowAny
+    ]
+
+    serializer_class = MovieDetailSerializer
+
+    queryset = (
+        Movie.objects
+        .prefetch_related(
+            "genres",
+            "languages",
+            "cast_members__cast_member",
+            "posters",
+        )
+    )
+    """
     Return complete information for one movie.
     """
 

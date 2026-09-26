@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -36,17 +37,50 @@ class ShowSeat(models.Model):
         db_index=True,
     )
 
+    # Temporary 2-minute seat reservation
+    held_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    held_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="held_show_seats",
+        db_index=True,
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["show", "seat"],
+                fields=[
+                    "show",
+                    "seat",
+                ],
                 name="unique_show_seat",
             ),
         ]
 
         indexes = [
             models.Index(
-                fields=["show", "status"],
+                fields=[
+                    "show",
+                    "status",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "held_until",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "held_by",
+                    "held_until",
+                ],
             ),
         ]
 
@@ -58,7 +92,8 @@ class ShowSeat(models.Model):
     def __str__(self):
         return (
             f"{self.show} - "
-            f"{self.seat.row}{self.seat.number}"
+            f"{self.seat.row}"
+            f"{self.seat.number}"
         )
 
 
@@ -70,11 +105,26 @@ class Booking(models.Model):
     STATUS_EXPIRED = "EXPIRED"
 
     STATUS_CHOICES = [
-        (STATUS_PENDING, "Pending"),
-        (STATUS_CONFIRMED, "Confirmed"),
-        (STATUS_CANCELLED, "Cancelled"),
-        (STATUS_FAILED, "Failed"),
-        (STATUS_EXPIRED, "Expired"),
+        (
+            STATUS_PENDING,
+            "Pending",
+        ),
+        (
+            STATUS_CONFIRMED,
+            "Confirmed",
+        ),
+        (
+            STATUS_CANCELLED,
+            "Cancelled",
+        ),
+        (
+            STATUS_FAILED,
+            "Failed",
+        ),
+        (
+            STATUS_EXPIRED,
+            "Expired",
+        ),
     ]
 
     booking_id = models.UUIDField(
@@ -84,7 +134,7 @@ class Booking(models.Model):
     )
 
     user = models.ForeignKey(
-        "auth.User",
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="bookings",
     )
@@ -131,18 +181,20 @@ class Booking(models.Model):
                 fields=[
                     "user",
                     "-created_at",
-                ]
+                ],
             ),
             models.Index(
                 fields=[
                     "status",
                     "expires_at",
-                ]
+                ],
             ),
         ]
 
     def __str__(self):
-        return str(self.booking_id)
+        return str(
+            self.booking_id
+        )
 
 
 class BookingSeat(models.Model):
@@ -176,10 +228,14 @@ class BookingSeat(models.Model):
 
         indexes = [
             models.Index(
-                fields=["booking"],
+                fields=[
+                    "booking",
+                ],
             ),
             models.Index(
-                fields=["show_seat"],
+                fields=[
+                    "show_seat",
+                ],
             ),
         ]
 
@@ -197,10 +253,22 @@ class Payment(models.Model):
     STATUS_REFUNDED = "REFUNDED"
 
     STATUS_CHOICES = [
-        (STATUS_PENDING, "Pending"),
-        (STATUS_SUCCESS, "Success"),
-        (STATUS_FAILED, "Failed"),
-        (STATUS_REFUNDED, "Refunded"),
+        (
+            STATUS_PENDING,
+            "Pending",
+        ),
+        (
+            STATUS_SUCCESS,
+            "Success",
+        ),
+        (
+            STATUS_FAILED,
+            "Failed",
+        ),
+        (
+            STATUS_REFUNDED,
+            "Refunded",
+        ),
     ]
 
     booking = models.OneToOneField(
@@ -209,9 +277,35 @@ class Payment(models.Model):
         related_name="payment",
     )
 
+    # Razorpay order ID / existing mock reference
     payment_reference = models.CharField(
         max_length=100,
         unique=True,
+    )
+
+    # Razorpay transaction/payment ID
+    gateway_payment_id = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+    )
+
+    # Razorpay order ID
+    gateway_order_id = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+    )
+
+    # Razorpay signature
+    gateway_signature = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
     )
 
     amount = models.DecimalField(
@@ -238,6 +332,26 @@ class Payment(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True,
     )
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=[
+                    "status",
+                    "-created_at",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "gateway_payment_id",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "gateway_order_id",
+                ],
+            ),
+        ]
 
     def __str__(self):
         return self.payment_reference
@@ -278,4 +392,6 @@ class Ticket(models.Model):
     )
 
     def __str__(self):
-        return f"Ticket {self.ticket_number}"
+        return str(
+            self.ticket_number
+        )

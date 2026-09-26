@@ -8,11 +8,11 @@ import {
   Download,
   Loader2,
   MapPin,
+  Ticket as TicketIcon,
 } from "lucide-react";
 import { useState } from "react";
 
 import type { Booking } from "@/lib/types";
-
 import BookingStatusBadge from "@/components/booking/BookingStatusBadge";
 import { api } from "@/lib/api";
 
@@ -34,6 +34,10 @@ export default function BookingCard({
 
   const handleDownloadTicket = async () => {
     if (!booking.ticket_download_url) {
+      setDownloadError(
+        "Your ticket is still being generated. Open the booking details page to check again."
+      );
+
       return;
     }
 
@@ -41,28 +45,35 @@ export default function BookingCard({
       setDownloadLoading(true);
       setDownloadError("");
 
-      const response = await api.get(
-        booking.ticket_download_url,
-        {
-          responseType: "blob",
-        }
-      );
+      const response =
+        await api.get(
+          booking.ticket_download_url,
+          {
+            responseType: "blob",
+          }
+        );
 
       const contentType =
-        typeof response.headers["content-type"] ===
-        "string"
-          ? response.headers["content-type"]
+        typeof response.headers[
+          "content-type"
+        ] === "string"
+          ? response.headers[
+              "content-type"
+            ]
           : "application/pdf";
 
-      const blob = new Blob(
-        [response.data],
-        {
-          type: contentType,
-        }
-      );
+      const blob =
+        new Blob(
+          [response.data],
+          {
+            type: contentType,
+          }
+        );
 
       const url =
-        window.URL.createObjectURL(blob);
+        window.URL.createObjectURL(
+          blob
+        );
 
       const link =
         document.createElement("a");
@@ -78,7 +89,9 @@ export default function BookingCard({
 
       link.remove();
 
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(
+        url
+      );
     } catch (err: any) {
       console.error(
         "Ticket download failed:",
@@ -90,6 +103,12 @@ export default function BookingCard({
       ) {
         setDownloadError(
           "Your session has expired. Please log in again."
+        );
+      } else if (
+        err?.response?.status === 404
+      ) {
+        setDownloadError(
+          "The ticket PDF is still being generated. Please open the booking again shortly."
         );
       } else {
         setDownloadError(
@@ -109,7 +128,9 @@ export default function BookingCard({
             <div className="mb-3">
               <BookingStatusBadge
                 status={booking.status}
-                category={booking.booking_category}
+                category={
+                  booking.booking_category
+                }
               />
             </div>
 
@@ -129,7 +150,9 @@ export default function BookingCard({
 
               <div className="flex flex-wrap gap-x-5 gap-y-2">
                 <span className="flex items-center gap-2">
-                  <CalendarDays size={14} />
+                  <CalendarDays
+                    size={14}
+                  />
 
                   {formatDate(
                     booking.show_time
@@ -184,36 +207,52 @@ export default function BookingCard({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {isConfirmed &&
-              booking.ticket_download_url && (
-                <button
-                  type="button"
-                  onClick={
-                    handleDownloadTicket
-                  }
-                  disabled={downloadLoading}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-semibold transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {downloadLoading ? (
-                    <>
-                      <Loader2
-                        size={14}
-                        className="animate-spin"
-                      />
-                      Downloading...
-                    </>
-                  ) : (
-                    <>
-                      <Download
-                        size={14}
-                      />
-                      Ticket
-                    </>
-                  )}
-                </button>
-              )}
+            {isConfirmed && (
+              <>
+                {booking.ticket_download_url ? (
+                  <button
+                    type="button"
+                    onClick={
+                      handleDownloadTicket
+                    }
+                    disabled={
+                      downloadLoading
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-2.5 text-xs font-semibold text-green-400 transition hover:bg-green-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {downloadLoading ? (
+                      <>
+                        <Loader2
+                          size={14}
+                          className="animate-spin"
+                        />
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <Download
+                          size={14}
+                        />
+                        Ticket
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <Link
+                    href={`/bookings/${booking.booking_id}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-4 py-2.5 text-xs font-semibold text-yellow-400 transition hover:bg-yellow-500/10"
+                  >
+                    <TicketIcon
+                      size={14}
+                    />
+                    Ticket generating
+                  </Link>
+                )}
+              </>
+            )}
 
-            {booking.status === "PENDING" && (
+            {booking.status ===
+              "PENDING" && (
               <Link
                 href={`/payment/${booking.booking_id}`}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold transition hover:bg-red-700"
@@ -227,7 +266,9 @@ export default function BookingCard({
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-xs font-semibold transition hover:bg-white/10"
             >
               View Details
-              <ChevronRight size={14} />
+              <ChevronRight
+                size={14}
+              />
             </Link>
           </div>
         </div>
@@ -242,7 +283,8 @@ export default function BookingCard({
       {isConfirmed &&
         booking.ticket_number && (
           <div className="border-t border-white/10 bg-green-500/[0.02] px-5 py-3 text-xs text-zinc-600 sm:px-6">
-            Ticket #{booking.ticket_number}
+            Ticket #
+            {booking.ticket_number}
           </div>
         )}
     </article>
@@ -256,12 +298,15 @@ function formatDate(value: string) {
     return value;
   }
 
-  return date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return date.toLocaleDateString(
+    "en-IN",
+    {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }
+  );
 }
 
 function formatTime(value: string) {
@@ -271,8 +316,11 @@ function formatTime(value: string) {
     return value;
   }
 
-  return date.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return date.toLocaleTimeString(
+    "en-IN",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    }
+  );
 }
