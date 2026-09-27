@@ -7,6 +7,8 @@ from movies.api.review_views import (
 )
 
 from movies.api.views import (
+    GenreListView,
+    LanguageListView,
     MovieDiscoveryView,
     MovieDetailView,
     MovieViewCreateView,
@@ -15,72 +17,61 @@ from movies.api.views import (
 
 
 urlpatterns = [
-    # ---------------------------------------------------------
     # Movie discovery
-    # GET /api/movies/
-    # ---------------------------------------------------------
     path(
         "",
         MovieDiscoveryView.as_view(),
         name="movie-discovery",
     ),
 
-    # ---------------------------------------------------------
-    # Movie detail
-    # GET /api/movies/<id>/
-    # ---------------------------------------------------------
+    # Genres
+    path(
+        "genres/",
+        GenreListView.as_view(),
+        name="genre-list",
+    ),
+
+    # Languages
+    path(
+        "languages/",
+        LanguageListView.as_view(),
+        name="language-list",
+    ),
+
+    # Movie details
     path(
         "<int:pk>/",
         MovieDetailView.as_view(),
         name="movie-detail",
     ),
 
-    # ---------------------------------------------------------
     # Recommendations
-    # GET /api/movies/recommended/
-    # ---------------------------------------------------------
     path(
         "recommended/",
         RecommendedMovieView.as_view(),
         name="recommended-movies",
     ),
 
-    # ---------------------------------------------------------
-    # Movie view tracking
-    # POST /api/movies/views/
-    # ---------------------------------------------------------
+    # Record movie view
     path(
         "views/",
         MovieViewCreateView.as_view(),
         name="movie-view-create",
     ),
 
-    # ---------------------------------------------------------
-    # Movie reviews
-    # GET  /api/movies/<movie_id>/reviews/
-    # POST /api/movies/<movie_id>/reviews/
-    # ---------------------------------------------------------
+    # Reviews
     path(
         "<int:movie_id>/reviews/",
         MovieReviewListCreateView.as_view(),
         name="movie-review-list-create",
     ),
 
-    # ---------------------------------------------------------
-    # Edit/delete own review
-    # PUT/PATCH/DELETE
-    # /api/movies/reviews/<review_id>/
-    # ---------------------------------------------------------
     path(
         "reviews/<int:review_id>/",
         MovieReviewUpdateDeleteView.as_view(),
         name="movie-review-detail",
     ),
 
-    # ---------------------------------------------------------
-    # Report review
-    # POST /api/movies/reviews/<review_id>/report/
-    # ---------------------------------------------------------
     path(
         "reviews/<int:review_id>/report/",
         ReportMovieReviewView.as_view(),
