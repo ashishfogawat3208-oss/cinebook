@@ -1,33 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
   CreditCard,
   Loader2,
+  RefreshCw,
   ShieldCheck,
   XCircle,
 } from "lucide-react";
-import {
-  useParams,
-  useRouter,
-} from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import PaymentCountdown from "@/components/booking/PaymentCountdown";
 import PaymentSummary from "@/components/booking/PaymentSummary";
+
 import {
   createRazorpayOrder,
   getBooking,
   verifyRazorpayPayment,
 } from "@/lib/bookings";
+
 import type { Booking } from "@/lib/types";
 
 declare global {
@@ -45,20 +41,25 @@ interface RazorpayOptions {
   name: string;
   description: string;
   order_id: string;
+
   prefill?: {
     name?: string;
     email?: string;
     contact?: string;
   };
+
   notes?: {
     booking_id?: string;
   };
+
   theme?: {
     color?: string;
   };
+
   modal?: {
     ondismiss?: () => void;
   };
+
   handler: (response: {
     razorpay_order_id: string;
     razorpay_payment_id: string;
@@ -83,7 +84,11 @@ function PaymentPageContent() {
   const params = useParams();
   const router = useRouter();
 
-  const bookingId = String(params.bookingId);
+  const rawBookingId = params.bookingId;
+
+  const bookingId = Array.isArray(rawBookingId)
+    ? rawBookingId[0]
+    : String(rawBookingId ?? "");
 
   const [booking, setBooking] =
     useState<Booking | null>(null);
@@ -94,6 +99,9 @@ function PaymentPageContent() {
   const [paying, setPaying] =
     useState(false);
 
+  const [expired, setExpired] =
+    useState(false);
+
   const [error, setError] =
     useState("");
 
@@ -102,7 +110,7 @@ function PaymentPageContent() {
 
   /*
    * ==========================================================
-   * LOAD RAZORPAY SCRIPT
+   * LOAD RAZORPAY
    * ==========================================================
    */
 
@@ -162,11 +170,6 @@ function PaymentPageContent() {
     };
 
     document.body.appendChild(script);
-
-    return () => {
-      script.onload = null;
-      script.onerror = null;
-    };
   }, []);
 
   /*
@@ -177,15 +180,49 @@ function PaymentPageContent() {
 
   const loadBooking = useCallback(
     async () => {
+      if (
+        !bookingId ||
+        bookingId === "undefined" ||
+        bookingId === "null"
+      ) {
+        setBooking(null);
+        setError("Invalid booking ID.");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        setError("");
 
         const data =
           await getBooking(bookingId);
 
         setBooking(data);
+
+        /*
+         * If backend already says the booking is
+         * expired, immediately put the UI into
+         * the expired state.
+         */
+        if (data.status === "EXPIRED") {
+          setExpired(true);
+        }
+
+        if (
+          data.status === "CONFIRMED" ||
+          data.status === "FAILED" ||
+          data.status === "CANCELLED"
+        ) {
+          setExpired(false);
+        }
       } catch (err: any) {
+        console.error(
+          "Failed to load booking:",
+          err
+        );
+
+        setBooking(null);
+
         setError(
           err?.response?.data?.detail ||
             "Unable to load this booking."
@@ -205,24 +242,42 @@ function PaymentPageContent() {
    * ==========================================================
    * PAYMENT EXPIRY
    * ==========================================================
+   *
+   * IMPORTANT:
+   *
+   * Do NOT call loadBooking() here.
+   *
+   * Calling the API every time the countdown reaches
+   * zero caused the previous refresh loop.
    */
 
   const handleExpired = useCallback(() => {
-    setError(
-      "Your payment window has expired. Please create a new booking."
-    );
+    setExpired(true);
+    setPaying(false);
 
-    loadBooking();
-  }, [loadBooking]);
+    setError(
+      "Your payment window has expired. Please select the seats again."
+    );
+  }, []);
 
   /*
    * ==========================================================
-   * OPEN RAZORPAY
+   * RAZORPAY PAYMENT
    * ==========================================================
    */
 
   const handlePayment = async () => {
     if (!booking) {
+      return;
+    }
+
+    /*
+     * Never allow payment after local expiry.
+     */
+    if (expired) {
+      setError(
+        "This booking has expired. Please select the seats again."
+      );
       return;
     }
 
@@ -242,7 +297,7 @@ function PaymentPageContent() {
 
     if (!window.Razorpay) {
       setError(
-        "Razorpay checkout is unavailable. Please refresh the page."
+        "Razorpay checkout is unavailable. Please refresh and try again."
       );
       return;
     }
@@ -252,19 +307,24 @@ function PaymentPageContent() {
       setError("");
 
       /*
-       * Step 1:
-       * Ask Django to create/reuse a Razorpay order.
+       * Create Razorpay order on the backend.
        */
-
       const order =
         await createRazorpayOrder(
           booking.booking_id
         );
 
       /*
-       * Step 2:
-       * Configure Razorpay Checkout.
+       * Double-check that the booking has not
+       * expired while creating the order.
        */
+      if (expired) {
+        setPaying(false);
+        setError(
+          "Your payment window has expired. Please select the seats again."
+        );
+        return;
+      }
 
       const options: RazorpayOptions = {
         key: order.key_id,
@@ -294,13 +354,6 @@ function PaymentPageContent() {
         },
 
         modal: {
-          /*
-           * Closing Razorpay does NOT fail
-           * the booking.
-           *
-           * The user can retry while the
-           * booking timer is active.
-           */
           ondismiss: () => {
             setPaying(false);
 
@@ -310,23 +363,11 @@ function PaymentPageContent() {
           },
         },
 
-        /*
-         * Step 3:
-         * Razorpay returns payment information.
-         */
         handler: async (
           razorpayResponse
         ) => {
           try {
             setError("");
-
-            /*
-             * Step 4:
-             * Send Razorpay response to Django.
-             *
-             * Django verifies the signature
-             * server-side.
-             */
 
             const verification =
               await verifyRazorpayPayment(
@@ -350,20 +391,18 @@ function PaymentPageContent() {
             }
 
             setError(
-              "Payment was received but booking confirmation could not be completed. Please refresh your booking."
+              "Payment verification could not be completed. Please check your booking."
+            );
+          } catch (err: any) {
+            console.error(
+              "Payment verification failed:",
+              err
             );
 
-            await loadBooking();
-          } catch (
-            verificationError: any
-          ) {
             setError(
-              verificationError?.response?.data
-                ?.detail ||
-                "Payment verification failed. Please contact support if money was deducted."
+              err?.response?.data?.detail ||
+                "Payment verification failed. Please try again."
             );
-
-            await loadBooking();
           } finally {
             setPaying(false);
           }
@@ -375,14 +414,17 @@ function PaymentPageContent() {
 
       razorpay.open();
     } catch (err: any) {
-      setPaying(false);
+      console.error(
+        "Unable to start Razorpay:",
+        err
+      );
 
       setError(
         err?.response?.data?.detail ||
           "Unable to start payment. Please try again."
       );
 
-      await loadBooking();
+      setPaying(false);
     }
   };
 
@@ -390,16 +432,12 @@ function PaymentPageContent() {
    * ==========================================================
    * LOADING
    * ==========================================================
-   *
-   * IMPORTANT:
-   * Navbar is NOT rendered here.
-   * Root layout already renders it.
    */
 
   if (loading) {
     return (
       <main className="min-h-screen bg-[#050505] text-white">
-        <div className="flex min-h-[75vh] items-center justify-center">
+        <div className="flex min-h-[75vh] items-center justify-center px-5">
           <div className="flex flex-col items-center gap-4 text-zinc-500">
             <Loader2
               size={32}
@@ -426,26 +464,27 @@ function PaymentPageContent() {
       <main className="min-h-screen bg-[#050505] text-white">
         <div className="flex min-h-[75vh] items-center justify-center px-5">
           <div className="max-w-md text-center">
-            <XCircle
-              size={52}
-              className="mx-auto text-red-500"
+            <AlertCircle
+              size={42}
+              className="mx-auto mb-5 text-red-500"
             />
 
-            <h1 className="mt-6 text-2xl font-bold">
+            <h1 className="text-2xl font-bold">
               Booking unavailable
             </h1>
 
             <p className="mt-3 text-sm leading-6 text-zinc-500">
-              {error ||
-                "We couldn't find this booking."}
+              {error}
             </p>
 
-            <Link
-              href="/movies"
-              className="mt-7 inline-flex rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold transition hover:bg-red-700"
+            <button
+              type="button"
+              onClick={loadBooking}
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold transition hover:bg-red-700"
             >
-              Browse Movies
-            </Link>
+              <RefreshCw size={16} />
+              Try again
+            </button>
           </div>
         </div>
       </main>
@@ -454,7 +493,30 @@ function PaymentPageContent() {
 
   /*
    * ==========================================================
-   * ALREADY CONFIRMED / EXPIRED / FAILED
+   * EXPIRED
+   * ==========================================================
+   */
+
+  if (
+    expired ||
+    booking.status === "EXPIRED"
+  ) {
+    return (
+      <BookingStatusPage
+        booking={booking}
+        title="Booking expired"
+        message={
+          error ||
+          "Your payment window expired. Please select the seats again."
+        }
+        icon="expired"
+      />
+    );
+  }
+
+  /*
+   * ==========================================================
+   * OTHER NON-PENDING STATES
    * ==========================================================
    */
 
@@ -462,37 +524,64 @@ function PaymentPageContent() {
     return (
       <BookingStatusPage
         booking={booking}
-        error={error}
+        title={
+          booking.status === "CONFIRMED"
+            ? "Booking confirmed"
+            : booking.status === "FAILED"
+            ? "Payment failed"
+            : "Booking unavailable"
+        }
+        message={
+          error ||
+          (booking.status ===
+          "CONFIRMED"
+            ? "This booking has already been successfully paid."
+            : booking.status ===
+              "FAILED"
+            ? "The payment could not be completed."
+            : `This booking currently has status ${booking.status}.`)
+        }
+        icon={
+          booking.status ===
+          "CONFIRMED"
+            ? "confirmed"
+            : "error"
+        }
       />
     );
   }
 
   /*
    * ==========================================================
-   * PAYMENT UI
+   * PAYMENT PAGE
    * ==========================================================
    */
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
-      <section className="border-b border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent">
-        <div className="mx-auto max-w-5xl px-5 py-10 sm:px-8">
+      <section className="border-b border-white/10 bg-[radial-gradient(circle_at_50%_0%,rgba(229,9,20,0.12),transparent_45%)]">
+        <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
           <Link
             href="/movies"
-            className="inline-flex items-center gap-2 text-sm text-zinc-500 transition hover:text-white"
+            className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-500 transition hover:text-white"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={15} />
             Back to movies
           </Link>
 
-          <h1 className="mt-5 text-3xl font-bold sm:text-4xl">
-            Complete your booking
-          </h1>
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-500">
+              Secure checkout
+            </p>
 
-          <p className="mt-3 text-sm text-zinc-500">
-            Your selected seats are temporarily
-            reserved.
-          </p>
+            <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
+              Complete your booking
+            </h1>
+
+            <p className="mt-3 text-sm text-zinc-500">
+              Your selected seats are temporarily reserved.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -558,19 +647,15 @@ function PaymentPageContent() {
                 className="mt-0.5 shrink-0 text-green-500"
               />
 
-              <span>
-                Your payment is processed through
-                Razorpay. CineBook confirms the
-                booking only after server-side
-                payment verification.
-              </span>
+              Your seats remain reserved only while the
+              payment window is active.
             </div>
 
             <button
               type="button"
               disabled={
                 paying ||
-                !razorpayLoaded
+                expired
               }
               onClick={handlePayment}
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-4 font-semibold transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -581,19 +666,13 @@ function PaymentPageContent() {
                     size={18}
                     className="animate-spin"
                   />
-                  Opening secure checkout...
-                </>
-              ) : !razorpayLoaded ? (
-                <>
-                  <Loader2
-                    size={18}
-                    className="animate-spin"
-                  />
-                  Loading payment...
+
+                  Processing payment...
                 </>
               ) : (
                 <>
                   <CreditCard size={18} />
+
                   Pay ₹
                   {Number(
                     booking.total_amount
@@ -603,8 +682,7 @@ function PaymentPageContent() {
             </button>
 
             <p className="mt-4 text-center text-[11px] leading-5 text-zinc-700">
-              Do not refresh the page while payment
-              is being processed.
+              Secure payment powered by Razorpay.
             </p>
           </div>
         </div>
@@ -614,66 +692,54 @@ function PaymentPageContent() {
 }
 
 /*
- * ============================================================
+ * ==========================================================
  * BOOKING STATUS PAGE
- * ============================================================
+ * ==========================================================
  */
 
 function BookingStatusPage({
   booking,
-  error,
+  title,
+  message,
+  icon,
 }: {
   booking: Booking;
-  error: string;
+  title: string;
+  message: string;
+  icon: "confirmed" | "expired" | "error";
 }) {
-  const isConfirmed =
-    booking.status === "CONFIRMED";
-
-  const isFailed =
-    booking.status === "FAILED";
-
-  const isExpired =
-    booking.status === "EXPIRED";
-
   return (
     <main className="min-h-screen bg-[#050505] text-white">
-      <div className="mx-auto flex min-h-[75vh] max-w-2xl items-center justify-center px-5 py-16">
-        <div className="w-full rounded-3xl border border-white/10 bg-white/[0.03] p-8 text-center sm:p-12">
-          {isConfirmed ? (
+      <div className="flex min-h-[80vh] items-center justify-center px-5">
+        <div className="max-w-lg text-center">
+          {icon === "confirmed" ? (
             <CheckCircle2
-              size={56}
+              size={52}
               className="mx-auto text-green-500"
             />
-          ) : (
+          ) : icon === "expired" ? (
             <XCircle
-              size={56}
+              size={52}
+              className="mx-auto text-amber-500"
+            />
+          ) : (
+            <AlertCircle
+              size={52}
               className="mx-auto text-red-500"
             />
           )}
 
           <h1 className="mt-6 text-3xl font-bold">
-            {isConfirmed
-              ? "Booking confirmed"
-              : isExpired
-              ? "Booking expired"
-              : isFailed
-              ? "Payment failed"
-              : "Booking is no longer payable"}
+            {title}
           </h1>
 
           <p className="mt-4 text-sm leading-7 text-zinc-500">
-            {error ||
-              (isConfirmed
-                ? "This booking has already been successfully paid."
-                : isExpired
-                ? "Your payment window expired. Please select the seats again."
-                : isFailed
-                ? "The payment could not be completed."
-                : `This booking currently has status ${booking.status}.`)}
+            {message}
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            {isConfirmed && (
+            {booking.status ===
+              "CONFIRMED" && (
               <Link
                 href={`/booking-confirmation/${booking.booking_id}`}
                 className="rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold transition hover:bg-red-700"
@@ -686,7 +752,7 @@ function BookingStatusPage({
               href="/movies"
               className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold transition hover:bg-white/10"
             >
-              Browse Movies
+              Select Seats Again
             </Link>
           </div>
         </div>
