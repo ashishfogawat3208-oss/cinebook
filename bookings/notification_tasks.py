@@ -1,32 +1,13 @@
-from celery import chain
-
-from bookings.email_tasks import (
-    send_ticket_email_task,
-)
-
-from bookings.tasks import (
-    generate_ticket_task,
-)
+from bookings.tasks import generate_ticket_task
 
 
-def queue_ticket_workflow(
-    booking_id,
-):
+def queue_ticket_workflow(booking_id):
     """
-    Queue ticket generation first and email delivery
-    second.
+    Queue ticket generation and email delivery.
 
-    The email task receives the ticket-generation result
-    automatically through the Celery chain.
+    The current generate_ticket_task handles both:
+    - PDF ticket generation
+    - Email delivery
     """
 
-    workflow = chain(
-        generate_ticket_task.s(
-            str(booking_id)
-        ),
-        send_ticket_email_task.s(
-            str(booking_id)
-        ),
-    )
-
-    return workflow.apply_async()
+    return generate_ticket_task.delay(str(booking_id))
