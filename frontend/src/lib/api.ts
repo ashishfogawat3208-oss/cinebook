@@ -1,7 +1,10 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://cinebook-api-tsnc.onrender.com/api"
+    : "http://127.0.0.1:8000/api");
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
