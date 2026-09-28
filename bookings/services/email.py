@@ -1,24 +1,14 @@
-import base64
 import os
 
-import resend
+from django.core.mail import EmailMessage
 
 
 def send_ticket_email(booking):
     """
-    Send the confirmed booking ticket PDF through Resend.
+    Send the confirmed booking ticket PDF through Gmail SMTP.
 
-    Email failures are intentionally caught by the caller so that
-    a successful payment is never converted into a failed payment
-    response just because email delivery has a problem.
+    Email failures are raised so the Celery task can retry them.
     """
-
-    api_key = os.getenv("RESEND_API_KEY")
-
-    if not api_key:
-        raise RuntimeError(
-            "RESEND_API_KEY is not configured."
-        )
 
     ticket = getattr(
         booking,
@@ -56,14 +46,7 @@ def send_ticket_email(booking):
     finally:
         ticket.pdf.close()
 
-    pdf_base64 = base64.b64encode(
-        pdf_bytes
-    ).decode("utf-8")
-
-    resend.api_key = api_key
-
     movie = booking.show.movie
-
     movie_title = movie.title
 
     booking_id = str(
@@ -80,106 +63,112 @@ def send_ticket_email(booking):
 
     show_time = booking.show.start_time
 
-    params = {
-        "from": "CineBook <onboarding@resend.dev>",
-        "to": [recipient_email],
-        "subject": (
-            f"CineBook Ticket Confirmed - "
-            f"{movie_title}"
-        ),
-        "html": f"""
+    subject = (
+        f"CineBook Ticket Confirmed - "
+        f"{movie_title}"
+    )
+
+    html_message = f"""
+    <div style="
+        font-family: Arial, sans-serif;
+        max-width: 650px;
+        margin: 0 auto;
+        padding: 24px;
+        color: #222;
+    ">
+
+        <h1 style="
+            margin-bottom: 8px;
+        ">
+            🎬 CineBook
+        </h1>
+
+        <h2>
+            Booking Confirmed
+        </h2>
+
+        <p>
+            Hi {user.get_username()},
+        </p>
+
+        <p>
+            Your movie booking has been
+            successfully confirmed.
+        </p>
+
         <div style="
-            font-family: Arial, sans-serif;
-            max-width: 650px;
-            margin: 0 auto;
-            padding: 24px;
-            color: #222;
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
         ">
 
-            <h1 style="
-                margin-bottom: 8px;
-            ">
-                🎬 CineBook
-            </h1>
-
-            <h2>
-                Booking Confirmed
-            </h2>
-
             <p>
-                Hi {user.get_username()},
+                <strong>Movie:</strong>
+                {movie_title}
             </p>
 
             <p>
-                Your movie booking has been
-                successfully confirmed.
-            </p>
-
-            <div style="
-                background: #f5f5f5;
-                border-radius: 12px;
-                padding: 20px;
-                margin: 20px 0;
-            ">
-
-                <p>
-                    <strong>Movie:</strong>
-                    {movie_title}
-                </p>
-
-                <p>
-                    <strong>Show:</strong>
-                    {show_time}
-                </p>
-
-                <p>
-                    <strong>Booking ID:</strong>
-                    {booking_id}
-                </p>
-
-                <p>
-                    <strong>Ticket Number:</strong>
-                    {ticket_number}
-                </p>
-
-                <p>
-                    <strong>Amount Paid:</strong>
-                    ₹{amount}
-                </p>
-
-            </div>
-
-            <p>
-                Your ticket PDF is attached to this email.
+                <strong>Show:</strong>
+                {show_time}
             </p>
 
             <p>
-                Please keep this email and your ticket
-                available when you arrive at the theatre.
+                <strong>Booking ID:</strong>
+                {booking_id}
             </p>
 
-            <p style="
-                margin-top: 30px;
-                color: #666;
-            ">
-                Thank you for booking with CineBook.
+            <p>
+                <strong>Ticket Number:</strong>
+                {ticket_number}
+            </p>
+
+            <p>
+                <strong>Amount Paid:</strong>
+                ₹{amount}
             </p>
 
         </div>
-        """,
-        "attachments": [
-            {
-                "content": pdf_base64,
-                "filename": (
-                    f"CineBook-Ticket-{ticket_number}.pdf"
-                ),
-                "content_type": "application/pdf",
-            }
-        ],
-    }
 
-    response = resend.Emails.send(
-        params
+        <p>
+            Your ticket PDF is attached to this email.
+        </p>
+
+        <p>
+            Please keep this email and your ticket
+            available when you arrive at the theatre.
+        </p>
+
+        <p style="
+            margin-top: 30px;
+            color: #666;
+        ">
+            Thank you for booking with CineBook.
+        </p>
+
+    </div>
+    """
+
+    from_email = os.getenv(
+        "DEFAULT_FROM_EMAIL",
+        os.getenv("EMAIL_HOST_USER"),
     )
 
-    return response
+    email = EmailMessage(
+        subject=subject,
+        body=html_message,
+        from_email=from_email,
+        to=[recipient_email],
+    )
+
+    email.content_subtype = "html"
+
+    email.attach(
+        f"CineBook-Ticket-{ticket_number}.pdf",
+        pdf_bytes,
+        "application/pdf",
+    )
+
+    return email.send(
+        fail_silently=False
+    )
