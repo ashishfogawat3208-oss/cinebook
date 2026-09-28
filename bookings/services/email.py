@@ -1,13 +1,74 @@
+import base64
+import json
 import os
+from email.message import EmailMessage as PythonEmailMessage
 
-from django.core.mail import EmailMessage
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
+
+GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
+
+
+def _get_gmail_credentials():
+    """
+    Load Gmail OAuth credentials.
+
+    On Render:
+        GMAIL_TOKEN_JSON_B64 contains the base64-encoded token.json.
+
+    Locally:
+        If GMAIL_TOKEN_JSON_B64 is not set, token.json is used.
+    """
+
+    encoded_token = os.getenv("GMAIL_TOKEN_JSON_B64")
+
+    if encoded_token:
+        try:
+            token_json = base64.b64decode(
+                encoded_token
+            ).decode("utf-8")
+
+            token_data = json.loads(token_json)
+
+        except Exception as exc:
+            raise RuntimeError(
+                "GMAIL_TOKEN_JSON_B64 is invalid."
+            ) from exc
+
+    else:
+        token_path = "token.json"
+
+        if not os.path.exists(token_path):
+            raise RuntimeError(
+                "Gmail OAuth token is not configured. "
+                "token.json is missing."
+            )
+
+        try:
+            with open(token_path, "r") as token_file:
+                token_data = json.load(token_file)
+
+        except Exception as exc:
+            raise RuntimeError(
+                "Could not read token.json."
+            ) from exc
+
+    credentials = Credentials.from_authorized_user_info(
+        token_data,
+        [GMAIL_SEND_SCOPE],
+    )
+
+    return credentials
 
 
 def send_ticket_email(booking):
     """
-    Send the confirmed booking ticket PDF through Gmail SMTP.
+    Send the confirmed booking ticket PDF through
+    the Gmail API over HTTPS.
 
-    Email failures are raised so the Celery task can retry them.
+    Email failures are raised so the Celery task
+    can retry them.
     """
 
     ticket = getattr(
@@ -151,24 +212,59 @@ def send_ticket_email(booking):
 
     from_email = os.getenv(
         "DEFAULT_FROM_EMAIL",
-        os.getenv("EMAIL_HOST_USER"),
+        os.getenv(
+            "EMAIL_HOST_USER",
+            "CineBook",
+        ),
     )
 
-    email = EmailMessage(
-        subject=subject,
-        body=html_message,
-        from_email=from_email,
-        to=[recipient_email],
+    email = PythonEmailMessage()
+
+    email["Subject"] = subject
+    email["From"] = from_email
+    email["To"] = recipient_email
+
+    email.set_content(
+        "Your CineBook ticket is attached."
     )
 
-    email.content_subtype = "html"
+    email.add_alternative(
+        html_message,
+        subtype="html",
+    )
 
-    email.attach(
-        f"CineBook-Ticket-{ticket_number}.pdf",
+    email.add_attachment(
         pdf_bytes,
-        "application/pdf",
+        maintype="application",
+        subtype="pdf",
+        filename=(
+            f"CineBook-Ticket-{ticket_number}.pdf"
+        ),
     )
 
-    return email.send(
-        fail_silently=False
+    raw_message = base64.urlsafe_b64encode(
+        email.as_bytes()
+    ).decode("utf-8")
+
+    credentials = _get_gmail_credentials()
+
+    gmail_service = build(
+        "gmail",
+        "v1",
+        credentials=credentials,
+        cache_discovery=False,
     )
+
+    result = (
+        gmail_service.users()
+        .messages()
+        .send(
+            userId="me",
+            body={
+                "raw": raw_message,
+            },
+        )
+        .execute()
+    )
+
+    return result

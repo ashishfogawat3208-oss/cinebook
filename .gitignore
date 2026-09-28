@@ -75,3 +75,6 @@ celerybeat-schedule-wal
 
 # Temporary production data fixture
 production_catalog.json
+
+credentials.json
+token.json
